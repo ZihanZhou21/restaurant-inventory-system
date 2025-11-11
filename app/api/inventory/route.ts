@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { kv, KV_KEYS, generateId } from '@/lib/kv'
+import { kv, KV_KEYS, generateId, InventoryRecord, Item, InventoryRecordWithItem } from '@/lib/kv'
 import { format, startOfDay, parseISO } from 'date-fns'
 
 // 获取库存记录
@@ -17,17 +17,19 @@ export async function GET(request: NextRequest) {
     
     const records = await Promise.all(
       recordIds.map(async (id) => {
-        const record = await kv.get(KV_KEYS.inventory(id as string))
+        const record = await kv.get<InventoryRecord | null>(KV_KEYS.inventory(id as string))
         if (record && record.itemId) {
-          const item = await kv.get(KV_KEYS.item(record.itemId))
-          return { ...record, item }
+          const item = await kv.get<Item | null>(KV_KEYS.item(record.itemId))
+          if (item) {
+            return { ...record, item } as InventoryRecordWithItem
+          }
         }
         return null
       })
     )
 
-    const validRecords = records
-      .filter((record): record is NonNullable<typeof record> => record !== null && record.item !== null)
+    const validRecords: InventoryRecordWithItem[] = records
+      .filter((record): record is InventoryRecordWithItem => record !== null)
       .sort((a, b) => a.item.name.localeCompare(b.item.name))
 
     return NextResponse.json(validRecords)
@@ -64,16 +66,22 @@ export async function POST(request: NextRequest) {
     }
 
     // 检查是否已存在记录
-    const existingRecordId = await kv.get(inventoryLookupKey)
+    const existingRecordId = await kv.get<string | null>(inventoryLookupKey)
     const now = new Date().toISOString()
 
-    let record
+    let record: InventoryRecord
     let recordId: string
 
     if (existingRecordId) {
       // 如果已存在，更新
-      recordId = existingRecordId as string
-      const existingRecord = await kv.get(KV_KEYS.inventory(recordId))
+      recordId = existingRecordId
+      const existingRecord = await kv.get<InventoryRecord | null>(KV_KEYS.inventory(recordId))
+      if (!existingRecord) {
+        return NextResponse.json(
+          { error: '库存记录数据异常' },
+          { status: 500 }
+        )
+      }
       record = {
         ...existingRecord,
         startQty: startQty || 0,

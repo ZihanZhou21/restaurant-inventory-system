@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { kv, KV_KEYS } from '@/lib/kv'
+import { kv, KV_KEYS, InventoryRecord, Item, InventoryRecordWithItem } from '@/lib/kv'
 import { startOfDay, parseISO, startOfWeek, startOfMonth, endOfWeek, endOfMonth, format } from 'date-fns'
 
 // 获取报表数据
@@ -33,20 +33,21 @@ export async function GET(request: NextRequest) {
     const allInventoryIds = await kv.smembers(KV_KEYS.inventoriesList())
     const allRecords = await Promise.all(
       allInventoryIds.map(async (id) => {
-        const record = await kv.get(KV_KEYS.inventory(id as string))
+        const record = await kv.get<InventoryRecord | null>(KV_KEYS.inventory(id as string))
         if (record && record.itemId) {
-          const item = await kv.get(KV_KEYS.item(record.itemId))
-          return { ...record, item }
+          const item = await kv.get<Item | null>(KV_KEYS.item(record.itemId))
+          if (item) {
+            return { ...record, item } as InventoryRecordWithItem
+          }
         }
         return null
       })
     )
 
     // 过滤记录
-    const records = allRecords
-      .filter((record): record is NonNullable<typeof record> => 
+    const records: InventoryRecordWithItem[] = allRecords
+      .filter((record): record is InventoryRecordWithItem => 
         record !== null && 
-        record.item !== null &&
         record.usage !== null &&
         record.usage !== undefined
       )

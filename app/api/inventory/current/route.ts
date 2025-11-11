@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { kv, KV_KEYS } from '@/lib/kv'
-import { startOfDay, parseISO, format } from 'date-fns'
+import { kv, KV_KEYS, Item, InventoryRecord } from '@/lib/kv'
+import { startOfDay, parseISO } from 'date-fns'
 
 // 获取所有物料的当前库存
 export async function GET(request: NextRequest) {
@@ -15,11 +15,11 @@ export async function GET(request: NextRequest) {
 
     // 获取所有物料
     const itemsList = await kv.smembers(KV_KEYS.itemsList())
-    const items = await Promise.all(
-      itemsList.map(async (id) => await kv.get(KV_KEYS.item(id)))
+    const items: (Item | null)[] = await Promise.all(
+      itemsList.map(async (id) => await kv.get<Item | null>(KV_KEYS.item(id as string)))
     )
-    const validItems = items
-      .filter((item): item is NonNullable<typeof item> => item !== null)
+    const validItems: Item[] = items
+      .filter((item): item is Item => item !== null)
       .sort((a, b) => a.name.localeCompare(b.name))
 
     // 获取每个物料的当前库存
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
         let latestDate = null
         
         for (const id of allInventoryIds) {
-          const record = await kv.get(KV_KEYS.inventory(id as string))
+          const record = await kv.get<InventoryRecord | null>(KV_KEYS.inventory(id as string))
           if (record && record.itemId === item.id) {
             const recordDate = parseISO(record.date)
             if (recordDate <= targetDate) {

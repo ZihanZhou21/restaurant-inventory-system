@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { kv, KV_KEYS, generateId } from '@/lib/kv'
+import { kv, KV_KEYS, generateId, PurchaseOrder, Item, PurchaseOrderWithItem } from '@/lib/kv'
 import { startOfDay, parseISO, addDays, format } from 'date-fns'
 
 // 获取采购计划
@@ -17,17 +17,19 @@ export async function GET(request: NextRequest) {
     
     const orders = await Promise.all(
       orderIds.map(async (id) => {
-        const order = await kv.get(KV_KEYS.purchase(id as string))
+        const order = await kv.get<PurchaseOrder | null>(KV_KEYS.purchase(id as string))
         if (order && order.itemId) {
-          const item = await kv.get(KV_KEYS.item(order.itemId))
-          return { ...order, item }
+          const item = await kv.get<Item | null>(KV_KEYS.item(order.itemId))
+          if (item) {
+            return { ...order, item } as PurchaseOrderWithItem
+          }
         }
         return null
       })
     )
 
-    const validOrders = orders
-      .filter((order): order is NonNullable<typeof order> => order !== null && order.item !== null)
+    const validOrders: PurchaseOrderWithItem[] = orders
+      .filter((order): order is PurchaseOrderWithItem => order !== null)
       .sort((a, b) => a.item.name.localeCompare(b.item.name))
 
     return NextResponse.json(validOrders)
@@ -58,16 +60,23 @@ export async function POST(request: NextRequest) {
     const purchaseLookupKey = KV_KEYS.purchaseByDateAndItem(dateKey, itemId)
 
     // 检查是否已存在该日期的采购计划
-    const existingOrderId = await kv.get(purchaseLookupKey)
+    const existingOrderId = await kv.get<string | null>(purchaseLookupKey)
     const now = new Date().toISOString()
 
-    let order
+    let order: PurchaseOrder
     let orderId: string
+    const isExisting = !!existingOrderId
     
     if (existingOrderId) {
       // 如果已存在，更新
-      orderId = existingOrderId as string
-      const existingOrder = await kv.get(KV_KEYS.purchase(orderId))
+      orderId = existingOrderId
+      const existingOrder = await kv.get<PurchaseOrder | null>(KV_KEYS.purchase(orderId))
+      if (!existingOrder) {
+        return NextResponse.json(
+          { error: '采购计划数据异常' },
+          { status: 500 }
+        )
+      }
       order = {
         ...existingOrder,
         plannedQty,
@@ -100,10 +109,16 @@ export async function POST(request: NextRequest) {
     await kv.set(KV_KEYS.purchase(orderId), order)
 
     // 获取物料信息
-    const item = await kv.get(KV_KEYS.item(itemId))
+    const item = await kv.get<Item | null>(KV_KEYS.item(itemId))
+    if (!item) {
+      return NextResponse.json(
+        { error: '物料不存在' },
+        { status: 404 }
+      )
+    }
     const orderWithItem = { ...order, item }
 
-    return NextResponse.json(orderWithItem, { status: existingOrder ? 200 : 201 })
+    return NextResponse.json(orderWithItem, { status: isExisting ? 200 : 201 })
   } catch (error) {
     console.error('创建采购计划失败:', error)
     return NextResponse.json(

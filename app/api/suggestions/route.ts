@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { kv, KV_KEYS } from '@/lib/kv'
+import { kv, KV_KEYS, Item, InventoryRecord } from '@/lib/kv'
 import { startOfDay, addDays, parseISO, format } from 'date-fns'
 
 // 生成采购建议
@@ -18,9 +18,9 @@ export async function GET(request: NextRequest) {
     // 获取所有物料
     const itemsList = await kv.smembers(KV_KEYS.itemsList())
     const items = await Promise.all(
-      itemsList.map(async (id) => await kv.get(KV_KEYS.item(id)))
+      itemsList.map(async (id) => await kv.get<Item | null>(KV_KEYS.item(id as string)))
     )
-    const validItems = items.filter((item): item is NonNullable<typeof item> => item !== null)
+    const validItems = items.filter((item): item is Item => item !== null)
 
     const suggestions = await Promise.all(
       validItems.map(async (item) => {
@@ -28,14 +28,14 @@ export async function GET(request: NextRequest) {
         const allInventoryIds = await kv.smembers(KV_KEYS.inventoriesList())
         const inventoryRecords = await Promise.all(
           allInventoryIds.map(async (id) => {
-            const record = await kv.get(KV_KEYS.inventory(id as string))
+            const record = await kv.get<InventoryRecord | null>(KV_KEYS.inventory(id as string))
             return record
           })
         )
         
         // 过滤出该物料的记录，按日期排序
         const itemRecords = inventoryRecords
-          .filter((record): record is NonNullable<typeof record> => 
+          .filter((record): record is InventoryRecord => 
             record !== null && record.itemId === item.id
           )
           .filter((record) => {
@@ -47,10 +47,10 @@ export async function GET(request: NextRequest) {
 
         // 获取今天的库存记录（如果存在）
         const todayLookupKey = KV_KEYS.inventoryByDateAndItem(todayKey, item.id)
-        const todayRecordId = await kv.get(todayLookupKey)
-        let todayRecord = null
+        const todayRecordId = await kv.get<string | null>(todayLookupKey)
+        let todayRecord: InventoryRecord | null = null
         if (todayRecordId) {
-          todayRecord = await kv.get(KV_KEYS.inventory(todayRecordId as string))
+          todayRecord = await kv.get<InventoryRecord | null>(KV_KEYS.inventory(todayRecordId))
         }
 
         // 计算平均日消耗量

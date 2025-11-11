@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { kv, KV_KEYS, generateId } from '@/lib/kv'
+import { kv, KV_KEYS, generateId, Item, InventoryRecord, PurchaseOrder } from '@/lib/kv'
 import { startOfDay, parseISO, subDays, format } from 'date-fns'
 
 // 初始化指定日期的库存记录
@@ -23,27 +23,29 @@ export async function POST(request: NextRequest) {
     // 获取所有物料
     const itemsList = await kv.smembers(KV_KEYS.itemsList())
     const items = await Promise.all(
-      itemsList.map(async (id) => await kv.get(KV_KEYS.item(id)))
+      itemsList.map(async (id) => await kv.get<Item | null>(KV_KEYS.item(id as string)))
     )
-    const validItems = items.filter((item): item is NonNullable<typeof item> => item !== null)
+    const validItems = items.filter((item): item is Item => item !== null)
 
     const records = await Promise.all(
       validItems.map(async (item) => {
         const inventoryLookupKey = KV_KEYS.inventoryByDateAndItem(dateKey, item.id)
         
         // 检查记录是否已存在
-        const existingRecordId = await kv.get(inventoryLookupKey)
+        const existingRecordId = await kv.get<string | null>(inventoryLookupKey)
         if (existingRecordId) {
-          const existingRecord = await kv.get(KV_KEYS.inventory(existingRecordId as string))
-          return existingRecord
+          const existingRecord = await kv.get<InventoryRecord | null>(KV_KEYS.inventory(existingRecordId))
+          if (existingRecord) {
+            return existingRecord
+          }
         }
 
         // 获取昨天的记录来计算今天的期初库存
         const yesterdayLookupKey = KV_KEYS.inventoryByDateAndItem(yesterdayKey, item.id)
-        const yesterdayRecordId = await kv.get(yesterdayLookupKey)
-        let yesterdayRecord = null
+        const yesterdayRecordId = await kv.get<string | null>(yesterdayLookupKey)
+        let yesterdayRecord: InventoryRecord | null = null
         if (yesterdayRecordId) {
-          yesterdayRecord = await kv.get(KV_KEYS.inventory(yesterdayRecordId as string))
+          yesterdayRecord = await kv.get<InventoryRecord | null>(KV_KEYS.inventory(yesterdayRecordId))
         }
 
         // 期初库存 = 昨日的期末库存（如果昨天已盘点）
@@ -51,10 +53,10 @@ export async function POST(request: NextRequest) {
 
         // 检查今天是否有采购记录
         const purchaseLookupKey = KV_KEYS.purchaseByDateAndItem(dateKey, item.id)
-        const purchaseId = await kv.get(purchaseLookupKey)
+        const purchaseId = await kv.get<string | null>(purchaseLookupKey)
         let receivedQty = 0
         if (purchaseId) {
-          const purchase = await kv.get(KV_KEYS.purchase(purchaseId as string))
+          const purchase = await kv.get<PurchaseOrder | null>(KV_KEYS.purchase(purchaseId))
           if (purchase) {
             receivedQty = purchase.actualQty ?? purchase.plannedQty ?? 0
           }

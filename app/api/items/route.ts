@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { kv, KV_KEYS, generateId } from '@/lib/kv'
+import { kv, KV_KEYS, generateId, Item } from '@/lib/kv'
 
 // 获取所有物料
 export async function GET() {
@@ -7,14 +7,14 @@ export async function GET() {
     const itemsList = await kv.smembers(KV_KEYS.itemsList())
     const items = await Promise.all(
       itemsList.map(async (id) => {
-        const item = await kv.get(KV_KEYS.item(id))
+        const item = await kv.get<Item | null>(KV_KEYS.item(id as string))
         return item
       })
     )
     
     // 过滤掉 null 值并排序
     const validItems = items
-      .filter((item): item is NonNullable<typeof item> => item !== null)
+      .filter((item): item is Item => item !== null)
       .sort((a, b) => a.name.localeCompare(b.name))
     
     return NextResponse.json(validItems)

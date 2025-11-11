@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { kv, KV_KEYS } from '@/lib/kv'
+import { kv, KV_KEYS, PurchaseOrder, Item } from '@/lib/kv'
 import { format, parseISO } from 'date-fns'
 
 // 更新采购计划
@@ -12,7 +12,7 @@ export async function PATCH(
     const { plannedQty, confirmed, actualQty } = body
 
     // 获取现有订单
-    const existingOrder = await kv.get(KV_KEYS.purchase(params.id))
+    const existingOrder = await kv.get<PurchaseOrder | null>(KV_KEYS.purchase(params.id))
     if (!existingOrder) {
       return NextResponse.json(
         { error: '采购计划不存在' },
@@ -20,7 +20,7 @@ export async function PATCH(
       )
     }
 
-    const updatedOrder = {
+    const updatedOrder: PurchaseOrder = {
       ...existingOrder,
       ...(plannedQty !== undefined && { plannedQty: parseFloat(String(plannedQty)) || 0 }),
       ...(confirmed !== undefined && { confirmed }),
@@ -31,7 +31,13 @@ export async function PATCH(
     await kv.set(KV_KEYS.purchase(params.id), updatedOrder)
 
     // 获取物料信息
-    const item = await kv.get(KV_KEYS.item(updatedOrder.itemId))
+    const item = await kv.get<Item | null>(KV_KEYS.item(updatedOrder.itemId))
+    if (!item) {
+      return NextResponse.json(
+        { error: '物料不存在' },
+        { status: 404 }
+      )
+    }
     const orderWithItem = { ...updatedOrder, item }
 
     return NextResponse.json(orderWithItem)
@@ -51,7 +57,7 @@ export async function DELETE(
 ) {
   try {
     // 获取订单信息
-    const order = await kv.get(KV_KEYS.purchase(params.id))
+    const order = await kv.get<PurchaseOrder | null>(KV_KEYS.purchase(params.id))
     if (!order) {
       return NextResponse.json(
         { error: '采购计划不存在' },

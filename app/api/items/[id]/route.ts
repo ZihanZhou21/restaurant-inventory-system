@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { kv, KV_KEYS } from '@/lib/kv'
+import { kv, KV_KEYS, Item } from '@/lib/kv'
 
 // 更新物料
 export async function PATCH(
@@ -11,7 +11,7 @@ export async function PATCH(
     const { name, unit, parLevel, safetyStock } = body
 
     // 获取现有物料
-    const existingItem = await kv.get(KV_KEYS.item(params.id))
+    const existingItem = await kv.get<Item | null>(KV_KEYS.item(params.id))
     if (!existingItem) {
       return NextResponse.json(
         { error: '物料不存在' },
@@ -62,7 +62,7 @@ export async function DELETE(
 ) {
   try {
     // 检查物料是否存在
-    const item = await kv.get(KV_KEYS.item(params.id))
+    const item = await kv.get<Item | null>(KV_KEYS.item(params.id))
     if (!item) {
       return NextResponse.json(
         { error: '物料不存在' },
