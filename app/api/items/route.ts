@@ -11,19 +11,16 @@ export async function GET() {
         return item
       })
     )
-    
+
     // 过滤掉 null 值并排序
     const validItems = items
       .filter((item): item is Item => item !== null)
       .sort((a, b) => a.name.localeCompare(b.name))
-    
+
     return NextResponse.json(validItems)
   } catch (error) {
     console.error('获取物料列表失败:', error)
-    return NextResponse.json(
-      { error: '获取物料列表失败' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: '获取物料列表失败' }, { status: 500 })
   }
 }
 
@@ -42,7 +39,7 @@ export async function POST(request: NextRequest) {
 
     const id = generateId()
     const now = new Date().toISOString()
-    
+
     const item = {
       id,
       name,
@@ -55,17 +52,13 @@ export async function POST(request: NextRequest) {
 
     // 保存物料
     await kv.set(KV_KEYS.item(id), item)
-    
+
     // 添加到物料列表
     await kv.sadd(KV_KEYS.itemsList(), id)
 
     return NextResponse.json(item, { status: 201 })
   } catch (error) {
     console.error('创建物料失败:', error)
-    return NextResponse.json(
-      { error: '创建物料失败' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: '创建物料失败' }, { status: 500 })
   }
 }
-

@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { kv, KV_KEYS, generateId, PurchaseOrder, Item, PurchaseOrderWithItem } from '@/lib/kv'
+import {
+  kv,
+  KV_KEYS,
+  generateId,
+  PurchaseOrder,
+  Item,
+  PurchaseOrderWithItem,
+} from '@/lib/kv'
 import { startOfDay, parseISO, addDays, format } from 'date-fns'
 
 // 获取采购计划
@@ -7,17 +14,19 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
     const dateStr = searchParams.get('date')
-    
-    const date = dateStr 
+
+    const date = dateStr
       ? startOfDay(parseISO(dateStr))
       : startOfDay(addDays(new Date(), 1)) // 默认获取明天的采购计划
 
     const dateKey = format(date, 'yyyy-MM-dd')
     const orderIds = await kv.smembers(KV_KEYS.purchasesByDate(dateKey))
-    
+
     const orders = await Promise.all(
       orderIds.map(async (id) => {
-        const order = await kv.get<PurchaseOrder | null>(KV_KEYS.purchase(id as string))
+        const order = await kv.get<PurchaseOrder | null>(
+          KV_KEYS.purchase(id as string)
+        )
         if (order && order.itemId) {
           const item = await kv.get<Item | null>(KV_KEYS.item(order.itemId))
           if (item) {
@@ -35,10 +44,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(validOrders)
   } catch (error) {
     console.error('获取采购计划失败:', error)
-    return NextResponse.json(
-      { error: '获取采购计划失败' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: '获取采购计划失败' }, { status: 500 })
   }
 }
 
@@ -66,21 +72,21 @@ export async function POST(request: NextRequest) {
     let order: PurchaseOrder
     let orderId: string
     const isExisting = !!existingOrderId
-    
+
     if (existingOrderId) {
       // 如果已存在，更新
       orderId = existingOrderId
-      const existingOrder = await kv.get<PurchaseOrder | null>(KV_KEYS.purchase(orderId))
+      const existingOrder = await kv.get<PurchaseOrder | null>(
+        KV_KEYS.purchase(orderId)
+      )
       if (!existingOrder) {
-        return NextResponse.json(
-          { error: '采购计划数据异常' },
-          { status: 500 }
-        )
+        return NextResponse.json({ error: '采购计划数据异常' }, { status: 500 })
       }
       order = {
         ...existingOrder,
         plannedQty,
-        confirmed: confirmed !== undefined ? confirmed : existingOrder.confirmed,
+        confirmed:
+          confirmed !== undefined ? confirmed : existingOrder.confirmed,
         updatedAt: now,
       }
     } else {
@@ -96,7 +102,7 @@ export async function POST(request: NextRequest) {
         createdAt: now,
         updatedAt: now,
       }
-      
+
       // 创建查找索引
       await kv.set(purchaseLookupKey, orderId)
       // 添加到日期索引
@@ -111,20 +117,13 @@ export async function POST(request: NextRequest) {
     // 获取物料信息
     const item = await kv.get<Item | null>(KV_KEYS.item(itemId))
     if (!item) {
-      return NextResponse.json(
-        { error: '物料不存在' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: '物料不存在' }, { status: 404 })
     }
     const orderWithItem = { ...order, item }
 
     return NextResponse.json(orderWithItem, { status: isExisting ? 200 : 201 })
   } catch (error) {
     console.error('创建采购计划失败:', error)
-    return NextResponse.json(
-      { error: '创建采购计划失败' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: '创建采购计划失败' }, { status: 500 })
   }
 }
-

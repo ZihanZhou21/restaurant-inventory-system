@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { kv, KV_KEYS, generateId, InventoryRecord, Item, InventoryRecordWithItem } from '@/lib/kv'
+import {
+  kv,
+  KV_KEYS,
+  generateId,
+  InventoryRecord,
+  Item,
+  InventoryRecordWithItem,
+} from '@/lib/kv'
 import { format, startOfDay, parseISO } from 'date-fns'
 
 // 获取库存记录
@@ -7,17 +14,19 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
     const dateStr = searchParams.get('date')
-    
-    const date = dateStr 
+
+    const date = dateStr
       ? startOfDay(parseISO(dateStr))
       : startOfDay(new Date())
 
     const dateKey = format(date, 'yyyy-MM-dd')
     const recordIds = await kv.smembers(KV_KEYS.inventoriesByDate(dateKey))
-    
+
     const records = await Promise.all(
       recordIds.map(async (id) => {
-        const record = await kv.get<InventoryRecord | null>(KV_KEYS.inventory(id as string))
+        const record = await kv.get<InventoryRecord | null>(
+          KV_KEYS.inventory(id as string)
+        )
         if (record && record.itemId) {
           const item = await kv.get<Item | null>(KV_KEYS.item(record.itemId))
           if (item) {
@@ -35,10 +44,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(validRecords)
   } catch (error) {
     console.error('获取库存记录失败:', error)
-    return NextResponse.json(
-      { error: '获取库存记录失败' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: '获取库存记录失败' }, { status: 500 })
   }
 }
 
@@ -58,7 +64,7 @@ export async function POST(request: NextRequest) {
     const recordDate = startOfDay(parseISO(date))
     const dateKey = format(recordDate, 'yyyy-MM-dd')
     const inventoryLookupKey = KV_KEYS.inventoryByDateAndItem(dateKey, itemId)
-    
+
     // 计算消耗量
     let usage: number | null = null
     if (endQty !== null && endQty !== undefined) {
@@ -75,12 +81,11 @@ export async function POST(request: NextRequest) {
     if (existingRecordId) {
       // 如果已存在，更新
       recordId = existingRecordId
-      const existingRecord = await kv.get<InventoryRecord | null>(KV_KEYS.inventory(recordId))
+      const existingRecord = await kv.get<InventoryRecord | null>(
+        KV_KEYS.inventory(recordId)
+      )
       if (!existingRecord) {
-        return NextResponse.json(
-          { error: '库存记录数据异常' },
-          { status: 500 }
-        )
+        return NextResponse.json({ error: '库存记录数据异常' }, { status: 500 })
       }
       record = {
         ...existingRecord,
@@ -105,7 +110,7 @@ export async function POST(request: NextRequest) {
         createdAt: now,
         updatedAt: now,
       }
-      
+
       // 创建查找索引
       await kv.set(inventoryLookupKey, recordId)
       // 添加到日期索引
@@ -120,9 +125,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(record, { status: existingRecordId ? 200 : 201 })
   } catch (error) {
     console.error('创建库存记录失败:', error)
-    return NextResponse.json(
-      { error: '创建库存记录失败' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: '创建库存记录失败' }, { status: 500 })
   }
 }
