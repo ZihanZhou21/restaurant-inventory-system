@@ -27,11 +27,13 @@ KV_REST_API_READ_ONLY_TOKEN=your_kv_read_only_token
 ### 3. 获取环境变量
 
 在 Vercel Dashboard 中：
+
 1. 进入你的项目
 2. 点击 Settings > Environment Variables
 3. 找到 KV 相关的环境变量并复制
 
 或者在 Vercel CLI 中：
+
 ```bash
 vercel env pull .env.local
 ```
@@ -41,15 +43,15 @@ vercel env pull .env.local
 ### 键名规范
 
 - `item:{id}` - 单个物料
-- `items:list` - 所有物料ID列表（Set）
+- `items:list` - 所有物料 ID 列表（Set）
 - `purchase:{id}` - 单个采购计划
 - `purchase:{date}:{itemId}` - 采购计划查找索引
-- `purchases:date:{date}` - 某日期的采购计划ID列表（Set）
-- `purchases:list` - 所有采购计划ID列表（Set）
+- `purchases:date:{date}` - 某日期的采购计划 ID 列表（Set）
+- `purchases:list` - 所有采购计划 ID 列表（Set）
 - `inventory:{id}` - 单个库存记录
 - `inventory:{date}:{itemId}` - 库存记录查找索引
-- `inventories:date:{date}` - 某日期的库存记录ID列表（Set）
-- `inventories:list` - 所有库存记录ID列表（Set）
+- `inventories:date:{date}` - 某日期的库存记录 ID 列表（Set）
+- `inventories:list` - 所有库存记录 ID 列表（Set）
 
 ## 迁移说明
 
@@ -74,6 +76,7 @@ vercel env pull .env.local
 本地开发时，确保 `.env.local` 文件包含正确的 KV 环境变量。
 
 运行项目：
+
 ```bash
 npm run dev
 ```
@@ -81,4 +84,3 @@ npm run dev
 ## 部署
 
 部署到 Vercel 时，环境变量会自动从项目设置中读取，无需额外配置。
-
